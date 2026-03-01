@@ -157,7 +157,7 @@ export default function JobDetailsPage() {
           gstPercentage,
           gstAmount,
           totalAmount: totalBeforeGst + gstAmount,
-          date: new Date().toISOString(),
+          date: job.date,
           isPaid: job.isPaid,
           payments: job.isPaid ? job.payments : []
         };

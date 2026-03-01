@@ -412,6 +412,18 @@ app.use((req, res, next) => {
     res.json(job);
   });
 
+  app.post("/api/invoices", async (req, res) => {
+    if (!(req.session as any).userId) {
+      return res.status(401).send("Unauthorized");
+    }
+    try {
+      const invoice = await storage.createInvoice(req.body);
+      res.status(201).json(invoice);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Invalid input" });
+    }
+  });
+
   app.get("/api/invoices", async (req, res) => {
     if (!(req.session as any).userId) {
       return res.status(401).send("Unauthorized");

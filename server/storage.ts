@@ -255,6 +255,7 @@ export interface IStorage {
 
   getInvoices(): Promise<Invoice[]>;
   getInvoice(id: string): Promise<Invoice | undefined>;
+  createInvoice(invoice: any): Promise<Invoice>;
   updateInvoice(id: string, invoice: Partial<Invoice>): Promise<Invoice | undefined>;
   deleteInvoice(id: string): Promise<boolean>;
   getCustomers(): Promise<any[]>;
@@ -916,7 +917,7 @@ export class MongoStorage implements IStorage {
           gstPercentage: j.gst,
           gstAmount,
           totalAmount,
-          date: new Date().toISOString(),
+          date: j.date,
           isPaid: (j as any).isPaid || false,
           payments: (j as any).payments || []
         });
@@ -1312,6 +1313,7 @@ export class MongoStorage implements IStorage {
             gstPercentage: j.gst,
             gstAmount,
             totalAmount,
+            date: j.date,
             isPaid: (j as any).isPaid,
             payments: (j as any).payments || []
           });
@@ -1393,7 +1395,7 @@ export class MongoStorage implements IStorage {
             gstPercentage: j.gst,
             gstAmount,
             totalAmount,
-            date: new Date().toISOString(),
+            date: j.date,
             isPaid: (j as any).isPaid || false,
             payments: (j as any).payments || []
           });
@@ -1716,6 +1718,23 @@ export class MongoStorage implements IStorage {
   async getInvoice(id: string): Promise<Invoice | undefined> {
     const inv = await InvoiceModel.findById(id);
     if (!inv) return undefined;
+    const obj = inv.toObject();
+    return {
+      ...obj,
+      id: inv._id.toString(),
+      items: (inv as any).items || [],
+      discount: obj.discount ?? 0,
+      laborCharge: obj.laborCharge ?? 0,
+      gstPercentage: obj.gstPercentage ?? 18,
+      isPaid: obj.isPaid ?? false,
+      paymentMethod: obj.paymentMethod,
+      paymentDate: obj.paymentDate,
+    } as Invoice;
+  }
+
+  async createInvoice(invoice: any): Promise<Invoice> {
+    const inv = new InvoiceModel(invoice);
+    await inv.save();
     const obj = inv.toObject();
     return {
       ...obj,
