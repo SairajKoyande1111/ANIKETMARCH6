@@ -534,6 +534,8 @@ export default function InvoicePage() {
       hiddenContainer.style.top = '0';
       hiddenContainer.style.width = '210mm'; // Standard A4 width
       hiddenContainer.style.backgroundColor = 'white';
+      // Ensure the container has the same font and base styles
+      hiddenContainer.className = 'font-sans antialiased text-slate-900';
       document.body.appendChild(hiddenContainer);
 
       try {
@@ -541,25 +543,32 @@ export default function InvoicePage() {
         const root = createRoot(hiddenContainer);
         
         const InvoiceWrapper = () => (
-          <div className="print-invoice bg-white p-8" style={{ width: '210mm', minHeight: '297mm' }}>
+          <div className="print-invoice bg-white p-8" style={{ width: '210mm', minHeight: '297mm', color: '#0f172a' }}>
             <PrintableInvoice invoice={invoice} />
           </div>
         );
 
         root.render(<InvoiceWrapper />);
-        // Increase wait time for images and fonts to settle
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait longer for all assets and layouts to stabilize
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         const canvas = await html2canvas(hiddenContainer, {
-          scale: 2,
+          scale: 3, // Increased scale for better clarity
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
           width: hiddenContainer.offsetWidth,
-          windowWidth: hiddenContainer.offsetWidth
+          windowWidth: hiddenContainer.offsetWidth,
+          onclone: (clonedDoc) => {
+            // Force specific styles in the cloned document for html2canvas
+            const el = clonedDoc.body.querySelector('.print-invoice') as HTMLElement;
+            if (el) {
+              el.style.visibility = 'visible';
+            }
+          }
         });
         
-        const imgData = canvas.toDataURL('image/png');
+        const imgData = canvas.toDataURL('image/png', 1.0);
         const pdf = new jsPDF({
           orientation: 'portrait',
           unit: 'mm',
@@ -567,10 +576,13 @@ export default function InvoicePage() {
         });
 
         const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        // Calculate dimensions to fit exactly on A4
         const imgProps = pdf.getImageProperties(imgData);
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        const contentHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, contentHeight, undefined, 'SLOW');
         const fileName = `Invoice_${invoice.invoiceNo}.pdf`;
         pdf.save(fileName); // Using .save() instead of manual blob for better compatibility
 
@@ -962,6 +974,11 @@ if (isLoading) {
 
       {/* Print Styles */}
       <style>{`
+        .print-invoice {
+          background-color: white !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
         @media print {
           body * {
             visibility: hidden;
