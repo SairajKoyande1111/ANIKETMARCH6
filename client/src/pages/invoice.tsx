@@ -74,6 +74,9 @@ function InvoiceHeader({ business, invoiceNo, date }: { business: string; invoic
       {/* Right Side: Invoice Details */}
       <div className="text-right space-y-2">
         <p className="text-xs font-bold text-red-600 uppercase tracking-widest">Invoice Details</p>
+        {business === "Auto Gamma" && (
+          <p className="text-[10px] font-bold text-slate-600">GST: 27ACEFA1874A1ZS</p>
+        )}
         <p className="text-2xl font-bold text-slate-900">#{invoiceNo}</p>
         <p className="text-slate-600">{format(new Date(date || new Date()), "dd MMM yyyy, hh:mm a")}</p>
       </div>
@@ -497,134 +500,53 @@ export default function InvoicePage() {
     }
   };
 
-  const handleSendWhatsApp = async (invoice: Invoice) => {
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'absolute';
-    tempDiv.style.left = '-9999px';
-    tempDiv.style.top = '0';
-    tempDiv.style.width = '800px';
-    document.body.appendChild(tempDiv);
+    const handleSendWhatsApp = async (invoice: Invoice) => {
+      const printContent = document.getElementById('printable-invoice');
+      if (!printContent) return;
 
-    const root = document.createElement('div');
-    const isAGNX = invoice.business === "AGNX";
-    root.innerHTML = `
-      <div class="print-invoice bg-white p-8" style="width: 800px; font-family: Arial, sans-serif;">
-        <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #dc2626; padding-bottom: 24px; margin-bottom: 24px;">
-          <div>
-            ${isAGNX ? 
-              `<div style="height: 64px; display: flex; align-items: center;">
-                <span style="font-size: 36px; font-weight: 900; color: #dc2626; font-style: italic; letter-spacing: -2px;">AGNX</span>
-              </div>` :
-              `<h2 style="font-size: 24px; font-weight: bold; color: #1e293b;">${invoice.business}</h2>`
-            }
-            <p style="font-size: 12px; color: #64748b; max-width: 300px;">Shop no. 09 & 10, Shreeji Parasio, Prasad Hotel Road, Badlapur, Maharashtra 421503</p>
-            <p style="font-size: 12px; color: #64748b;">Contact: +91 77380 16768</p>
-          </div>
-          <div style="text-align: right;">
-            <p style="font-size: 10px; font-weight: bold; color: #dc2626; text-transform: uppercase;">Invoice Details</p>
-            <p style="font-size: 20px; font-weight: bold; color: #1e293b;">#${invoice.invoiceNo}</p>
-            <p style="color: #64748b;">${format(new Date(invoice.date || new Date()), "dd MMM yyyy")}</p>
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 8px;">
-          <div>
-            <p style="font-size: 10px; font-weight: bold; color: #dc2626; text-transform: uppercase;">Bill To</p>
-            <p style="font-size: 18px; font-weight: bold; color: #1e293b;">${invoice.customerName}</p>
-            <p style="color: #64748b;">${invoice.phoneNumber}</p>
-          </div>
-          <div style="text-align: right;">
-            <p style="font-size: 10px; font-weight: bold; color: #dc2626; text-transform: uppercase;">Vehicle Details</p>
-            <p style="color: #64748b;">${invoice.vehicleMake || '-'} ${invoice.vehicleModel || ''}</p>
-            <p style="color: #64748b;">License: ${invoice.licensePlate || '-'}</p>
-          </div>
-        </div>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-          <thead>
-            <tr style="background: #1e293b; color: white;">
-              <th style="padding: 12px; text-align: left;">Item</th>
-              <th style="padding: 12px; text-align: right;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${invoice.items.filter(i => i.type !== "Labor").map((item, idx) => `
-              <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8fafc'};">
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${item.name}</td>
-                <td style="padding: 12px; text-align: right; border-bottom: 1px solid #e2e8f0;">₹${(item.price * (item.quantity || 1)).toLocaleString()}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <div style="display: flex; justify-content: flex-end;">
-          <div style="width: 300px; background: #f8fafc; padding: 16px; border-radius: 8px;">
-            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-              <span>Subtotal</span>
-              <span style="font-weight: bold;">₹{invoice.subtotal.toLocaleString()}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-              <span>GST (${invoice.gstPercentage || 18}%)</span>
-              <span style="font-weight: bold;">₹${Math.round(invoice.subtotal - (invoice.subtotal / (1 + (invoice.gstPercentage || 18) / 100))).toLocaleString()}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 12px 0; font-size: 18px; font-weight: bold; color: #dc2626;">
-              <span>TOTAL</span>
-              <span>₹${invoice.subtotal.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-        <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center;">
-          <p style="font-size: 16px; font-weight: bold; color: #64748b;">Thank You For Your Business</p>
-        </div>
-      </div>
-    `;
-    tempDiv.appendChild(root);
+      try {
+        const canvas = await html2canvas(printContent, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
 
-    try {
-      toast({ title: "Generating PDF...", description: "Please wait while the invoice is being prepared." });
-      
-      const canvas = await html2canvas(root, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Invoice_${invoice.invoiceNo}.pdf`);
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        const pdfBlob = pdf.output('blob');
+        const fileName = `Invoice_${invoice.invoiceNo}.pdf`;
 
-      let phoneNumber = invoice.phoneNumber.replace(/\D/g, '');
-      if (phoneNumber.startsWith('0')) {
-        phoneNumber = '91' + phoneNumber.substring(1);
-      } else if (!phoneNumber.startsWith('91')) {
-        phoneNumber = '91' + phoneNumber;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = fileName;
+        link.click();
+
+        let phoneNumber = invoice.phoneNumber.replace(/\D/g, '');
+        if (phoneNumber.startsWith('0')) phoneNumber = '91' + phoneNumber.substring(1);
+        else if (!phoneNumber.startsWith('91')) phoneNumber = '91' + phoneNumber;
+
+        const message = encodeURIComponent(`Hello ${invoice.customerName}, here is your invoice #${invoice.invoiceNo} from ${invoice.business}.`);
+        window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+        
+        toast({ title: "Success", description: "Invoice downloaded and WhatsApp opened" });
+      } catch (error) {
+        console.error('Error:', error);
+        toast({ title: "Error", description: "Failed to generate invoice PDF", variant: "destructive" });
       }
+    };
 
-      const message = encodeURIComponent(
-        `Hello ${invoice.customerName},\n\nPlease find your invoice #${invoice.invoiceNo} for ₹${invoice.subtotal.toLocaleString()}.\n\nThank you for choosing ${invoice.business}!`
-      );
-
-      window.open(`https://web.whatsapp.com/send?phone=${phoneNumber}&text=${message}`, '_blank');
-      
-      toast({ 
-        title: "PDF Downloaded!", 
-        description: "WhatsApp is opening. Please attach the downloaded PDF to send it." 
-      });
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast({ 
-        title: "Error", 
-        description: "Failed to generate PDF. Please try again.", 
-        variant: "destructive" 
-      });
-    } finally {
-      document.body.removeChild(tempDiv);
-    }
-  };
-
-  if (isLoading) {
+if (isLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-[60vh]">
