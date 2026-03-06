@@ -527,65 +527,157 @@ export default function InvoicePage() {
   };
 
     const handleSendWhatsApp = async (invoice: Invoice) => {
-      // Create a hidden container for the invoice with fixed A4 width
-      const hiddenContainer = document.createElement('div');
-      hiddenContainer.style.position = 'fixed';
-      hiddenContainer.style.left = '-9999px';
-      hiddenContainer.style.top = '0';
-      hiddenContainer.style.width = '210mm'; // Standard A4 width
-      hiddenContainer.style.backgroundColor = 'white';
-      // Ensure the container has the same font and base styles
-      hiddenContainer.className = 'font-sans antialiased text-slate-900';
-      document.body.appendChild(hiddenContainer);
-
       try {
-        const { createRoot } = await import('react-dom/client');
-        const root = createRoot(hiddenContainer);
+        const { default: jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
         
-        const InvoiceWrapper = () => (
-          <div className="print-invoice bg-white p-8" style={{ width: '210mm', minHeight: '297mm', color: '#0f172a' }}>
-            <PrintableInvoice invoice={invoice} />
-          </div>
-        );
+        const doc = new jsPDF();
+        const businessInfo = BUSINESS_INFO[invoice.business];
+        
+        // Add Business Logo/Name
+        if (invoice.business === "AGNX") {
+          doc.setFontSize(24);
+          doc.setTextColor(220, 38, 38); // red-600
+          doc.setFont("helvetica", "bold", "italic");
+          doc.text("AGNX", 14, 20);
+        } else {
+          // If logo is available, we'd add it here. For now, text fallback for reliability
+          doc.setFontSize(20);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "bold");
+          doc.text(businessInfo.name, 14, 20);
+        }
 
-        root.render(<InvoiceWrapper />);
-        // Wait longer for all assets and layouts to stabilize
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Business Details
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139); // slate-500
+        doc.setFont("helvetica", "normal");
+        const addressLines = doc.splitTextToSize(`ADDRESS: ${businessInfo.address}`, 100);
+        doc.text(addressLines, 14, 30);
+        doc.text(`CONTACT: ${businessInfo.phone}`, 14, 45);
+        doc.text(`MAIL: ${businessInfo.email}`, 14, 50);
+        doc.text(`WEBSITE: ${businessInfo.website}`, 14, 55);
 
-        const canvas = await html2canvas(hiddenContainer, {
-          scale: 3, // Increased scale for better clarity
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          width: hiddenContainer.offsetWidth,
-          windowWidth: hiddenContainer.offsetWidth,
-          onclone: (clonedDoc) => {
-            // Force specific styles in the cloned document for html2canvas
-            const el = clonedDoc.body.querySelector('.print-invoice') as HTMLElement;
-            if (el) {
-              el.style.visibility = 'visible';
-            }
-          }
+        // Invoice Header Details (Right Side)
+        doc.textAlign = "right";
+        doc.setFontSize(10);
+        doc.setTextColor(220, 38, 38);
+        doc.text("INVOICE DETAILS", 196, 20, { align: "right" });
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        if (invoice.business === "Auto Gamma") {
+          doc.text("GST: 27ACEFA1874A1ZS", 196, 25, { align: "right" });
+        }
+        
+        doc.setFontSize(16);
+        doc.setTextColor(15, 23, 42); // slate-900
+        doc.setFont("helvetica", "bold");
+        doc.text(`#${invoice.invoiceNo}`, 196, 35, { align: "right" });
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
+        doc.text(format(new Date(invoice.date || new Date()), "dd MMM yyyy, hh:mm a"), 196, 42, { align: "right" });
+
+        // Bill To & Vehicle Details Boxes
+        doc.setFillColor(248, 250, 252); // slate-50
+        doc.rect(14, 65, 90, 45, "F");
+        doc.rect(106, 65, 90, 45, "F");
+
+        doc.textAlign = "left";
+        doc.setFontSize(8);
+        doc.setTextColor(220, 38, 38);
+        doc.setFont("helvetica", "bold");
+        doc.text("BILL TO", 18, 72);
+        doc.text("VEHICLE DETAILS", 110, 72);
+
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text(invoice.customerName, 18, 80);
+        
+        doc.setFontSize(9);
+        doc.setTextColor(71, 85, 105);
+        doc.setFont("helvetica", "normal");
+        doc.text(invoice.phoneNumber, 18, 86);
+        if (invoice.emailAddress) doc.text(invoice.emailAddress, 18, 92);
+
+        // Vehicle Details Content
+        doc.setFont("helvetica", "bold");
+        doc.text("Make / Model:", 110, 80);
+        doc.text("Year:", 110, 86);
+        doc.text("License Plate:", 110, 92);
+        
+        doc.setFont("helvetica", "normal");
+        doc.text(`${invoice.vehicleMake || "-"} ${invoice.vehicleModel || ""}`, 140, 80);
+        doc.text(`${invoice.vehicleYear || "-"}`, 140, 86);
+        doc.text(`${invoice.licensePlate || "-"}`, 140, 92);
+
+        // Service Items Table
+        const tableData = invoice.items.filter(i => i.type !== "Labor").map((item, idx) => [
+          idx + 1,
+          item.name.split('\n')[0], // Simplified description for PDF reliability
+          item.type,
+          `Rs. ${item.price.toLocaleString()}`,
+          item.quantity || 1,
+          `Rs. ${(item.price * (item.quantity || 1)).toLocaleString()}`
+        ]);
+
+        autoTable(doc, {
+          startY: 115,
+          head: [['Sr No.', 'Description', 'Type', 'Rate', 'Qty', 'Amount']],
+          body: tableData,
+          headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          margin: { left: 14, right: 14 },
+          theme: 'striped'
         });
-        
-        const imgData = canvas.toDataURL('image/png', 1.0);
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
 
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const finalY = (doc as any).lastAutoTable.finalY + 10;
         
-        // Calculate dimensions to fit exactly on A4
-        const imgProps = pdf.getImageProperties(imgData);
-        const contentHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        // Summary Section
+        doc.setFontSize(10);
+        const summaryX = 140;
+        doc.text("Base Amount:", summaryX, finalY);
+        doc.text(`Rs. ${(invoice.subtotal - (invoice.laborCharge || 0)).toLocaleString()}`, 196, finalY, { align: "right" });
+        
+        let currentY = finalY + 7;
+        if (invoice.laborCharge > 0) {
+          doc.text("Labor Charges:", summaryX, currentY);
+          doc.text(`Rs. ${invoice.laborCharge.toLocaleString()}`, 196, currentY, { align: "right" });
+          currentY += 7;
+        }
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, contentHeight, undefined, 'SLOW');
+        if (invoice.discount > 0) {
+          doc.setTextColor(22, 163, 74); // green-600
+          doc.text("Discount:", summaryX, currentY);
+          doc.text(`(-) Rs. ${invoice.discount.toLocaleString()}`, 196, currentY, { align: "right" });
+          doc.setTextColor(15, 23, 42);
+          currentY += 7;
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(220, 38, 38);
+        doc.text("GRAND TOTAL:", summaryX, currentY + 5);
+        doc.text(`Rs. ${(invoice.subtotal - (invoice.discount || 0)).toLocaleString()}`, 196, currentY + 5, { align: "right" });
+
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.setFont("helvetica", "italic");
+        const footerText = "Please Note: Please be advised that the booking amount mentioned in this invoice is non-refundable. This amount secures your reservation and cannot be returned in case of cancellation or modification.";
+        doc.text(doc.splitTextToSize(footerText, 180), 14, 270);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(71, 85, 105);
+        doc.setFont("helvetica", "bold");
+        doc.text("Thank You For Your Business", 105, 285, { align: "center" });
+
         const fileName = `Invoice_${invoice.invoiceNo}.pdf`;
-        pdf.save(fileName); // Using .save() instead of manual blob for better compatibility
+        doc.save(fileName);
 
+        // WhatsApp Logic
         let phoneNumber = invoice.phoneNumber.replace(/\D/g, '');
         if (phoneNumber.startsWith('0')) phoneNumber = '91' + phoneNumber.substring(1);
         else if (!phoneNumber.startsWith('91') && phoneNumber.length === 10) phoneNumber = '91' + phoneNumber;
@@ -594,9 +686,9 @@ export default function InvoicePage() {
         const paidAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
         const remainingBalance = invoice.totalAmount - paidAmount;
 
-        let paymentInfo = `Total Amount: ₹${invoice.totalAmount.toLocaleString()}`;
+        let paymentInfo = `Total Amount: Rs. ${invoice.totalAmount.toLocaleString()}`;
         if (paidAmount > 0) {
-          paymentInfo += `\nPaid Amount: ₹${paidAmount.toLocaleString()}\nRemaining Balance: ₹${remainingBalance.toLocaleString()}`;
+          paymentInfo += `\nPaid Amount: Rs. ${paidAmount.toLocaleString()}\nRemaining Balance: Rs. ${remainingBalance.toLocaleString()}`;
         }
 
         const message = encodeURIComponent(
@@ -607,13 +699,10 @@ export default function InvoicePage() {
         );
         
         window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
-        
-        toast({ title: "Success", description: "Invoice downloaded and WhatsApp opened" });
+        toast({ title: "Success", description: "Invoice generated and WhatsApp opened" });
       } catch (error) {
         console.error('Error:', error);
         toast({ title: "Error", description: "Failed to generate invoice PDF", variant: "destructive" });
-      } finally {
-        document.body.removeChild(hiddenContainer);
       }
     };
 
