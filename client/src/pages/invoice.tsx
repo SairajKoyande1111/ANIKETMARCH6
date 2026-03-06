@@ -501,14 +501,30 @@ export default function InvoicePage() {
   };
 
     const handleSendWhatsApp = async (invoice: Invoice) => {
-      const printContent = document.getElementById('printable-invoice');
-      if (!printContent) {
-        toast({ title: "Error", description: "Invoice content not found. Please click 'View' first.", variant: "destructive" });
-        return;
-      }
+      // Create a hidden container for the invoice
+      const hiddenContainer = document.createElement('div');
+      hiddenContainer.style.position = 'absolute';
+      hiddenContainer.style.left = '-9999px';
+      hiddenContainer.style.top = '-9999px';
+      hiddenContainer.style.width = '800px'; // Standard A4-ish width
+      document.body.appendChild(hiddenContainer);
 
       try {
-        const canvas = await html2canvas(printContent, {
+        // Render the printable invoice into the hidden container
+        const root = (await import('react-dom/client')).createRoot(hiddenContainer);
+        
+        // We need to wrap it in a div with the same class for styles to apply
+        const InvoiceWrapper = () => (
+          <div className="bg-white p-8">
+            <PrintableInvoice invoice={invoice} />
+          </div>
+        );
+
+        // Render and wait a bit for styles/images to load
+        root.render(<InvoiceWrapper />);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const canvas = await html2canvas(hiddenContainer, {
           scale: 2,
           useCORS: true,
           logging: false,
@@ -562,6 +578,9 @@ export default function InvoicePage() {
       } catch (error) {
         console.error('Error:', error);
         toast({ title: "Error", description: "Failed to generate invoice PDF", variant: "destructive" });
+      } finally {
+        // Clean up
+        document.body.removeChild(hiddenContainer);
       }
     };
 
