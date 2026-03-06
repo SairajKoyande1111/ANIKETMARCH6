@@ -502,7 +502,10 @@ export default function InvoicePage() {
 
     const handleSendWhatsApp = async (invoice: Invoice) => {
       const printContent = document.getElementById('printable-invoice');
-      if (!printContent) return;
+      if (!printContent) {
+        toast({ title: "Error", description: "Invoice content not found. Please click 'View' first.", variant: "destructive" });
+        return;
+      }
 
       try {
         const canvas = await html2canvas(printContent, {
@@ -534,9 +537,25 @@ export default function InvoicePage() {
 
         let phoneNumber = invoice.phoneNumber.replace(/\D/g, '');
         if (phoneNumber.startsWith('0')) phoneNumber = '91' + phoneNumber.substring(1);
-        else if (!phoneNumber.startsWith('91')) phoneNumber = '91' + phoneNumber;
+        else if (!phoneNumber.startsWith('91') && phoneNumber.length === 10) phoneNumber = '91' + phoneNumber;
 
-        const message = encodeURIComponent(`Hello ${invoice.customerName}, here is your invoice #${invoice.invoiceNo} for ₹${invoice.totalAmount.toLocaleString()} from ${invoice.business}.`);
+        const payments = invoice.payments || [];
+        const paidAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const remainingBalance = invoice.totalAmount - paidAmount;
+
+        let paymentInfo = `Total Amount: ₹${invoice.totalAmount.toLocaleString()}`;
+        if (paidAmount > 0) {
+          paymentInfo += `\nPaid Amount: ₹${paidAmount.toLocaleString()}\nRemaining Balance: ₹${remainingBalance.toLocaleString()}`;
+        }
+
+        const message = encodeURIComponent(
+          `Hello ${invoice.customerName},\n\n` +
+          `Your invoice #${invoice.invoiceNo} from ${invoice.business} has been generated.\n\n` +
+          `${paymentInfo}\n\n` +
+          `You can download your invoice using the link shared or find the attached copy.\n\n` +
+          `Thank you for choosing ${invoice.business}!`
+        );
+        
         window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
         
         toast({ title: "Success", description: "Invoice downloaded and WhatsApp opened" });
