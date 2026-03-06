@@ -492,43 +492,71 @@ export default function InvoicePage() {
   const handlePrint = () => {
     const printContent = document.getElementById('printable-invoice');
     if (printContent) {
-      const originalContents = document.body.innerHTML;
-      document.body.innerHTML = printContent.outerHTML;
-      window.print();
-      document.body.innerHTML = originalContents;
-      window.location.reload();
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(`
+          <html>
+            <head>
+              <title>Invoice - ${selectedInvoice?.invoiceNo}</title>
+              <link rel="stylesheet" href="/src/index.css">
+              <style>
+                body { margin: 0; padding: 0; background: white; }
+                .print-invoice { width: 100%; max-width: 800px; margin: 0 auto; padding: 40px; }
+                @page { size: A4; margin: 0; }
+                @media print {
+                  body { -webkit-print-color-adjust: exact; }
+                }
+              </style>
+            </head>
+            <body>
+              ${printContent.outerHTML}
+              <script>
+                window.onload = () => {
+                  setTimeout(() => {
+                    window.print();
+                    window.close();
+                  }, 500);
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        win.document.close();
+      }
     }
   };
 
     const handleSendWhatsApp = async (invoice: Invoice) => {
-      // Create a hidden container for the invoice
+      // Create a hidden container for the invoice with fixed A4 width
       const hiddenContainer = document.createElement('div');
-      hiddenContainer.style.position = 'absolute';
+      hiddenContainer.style.position = 'fixed';
       hiddenContainer.style.left = '-9999px';
-      hiddenContainer.style.top = '-9999px';
-      hiddenContainer.style.width = '800px'; // Standard A4-ish width
+      hiddenContainer.style.top = '0';
+      hiddenContainer.style.width = '210mm'; // Standard A4 width
+      hiddenContainer.style.backgroundColor = 'white';
       document.body.appendChild(hiddenContainer);
 
       try {
-        // Render the printable invoice into the hidden container
-        const root = (await import('react-dom/client')).createRoot(hiddenContainer);
+        const { createRoot } = await import('react-dom/client');
+        const root = createRoot(hiddenContainer);
         
-        // We need to wrap it in a div with the same class for styles to apply
         const InvoiceWrapper = () => (
-          <div className="bg-white p-8">
+          <div className="print-invoice bg-white p-8" style={{ width: '210mm', minHeight: '297mm' }}>
             <PrintableInvoice invoice={invoice} />
           </div>
         );
 
-        // Render and wait a bit for styles/images to load
         root.render(<InvoiceWrapper />);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Increase wait time for images and fonts to settle
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const canvas = await html2canvas(hiddenContainer, {
           scale: 2,
           useCORS: true,
           logging: false,
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          width: hiddenContainer.offsetWidth,
+          windowWidth: hiddenContainer.offsetWidth
         });
         
         const imgData = canvas.toDataURL('image/png');
@@ -538,18 +566,13 @@ export default function InvoicePage() {
           format: 'a4'
         });
 
-        const imgProps = pdf.getImageProperties(imgData);
         const pdfWidth = pdf.internal.pageSize.getWidth();
+        const imgProps = pdf.getImageProperties(imgData);
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        const pdfBlob = pdf.output('blob');
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
         const fileName = `Invoice_${invoice.invoiceNo}.pdf`;
-
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(pdfBlob);
-        link.download = fileName;
-        link.click();
+        pdf.save(fileName); // Using .save() instead of manual blob for better compatibility
 
         let phoneNumber = invoice.phoneNumber.replace(/\D/g, '');
         if (phoneNumber.startsWith('0')) phoneNumber = '91' + phoneNumber.substring(1);
@@ -568,7 +591,6 @@ export default function InvoicePage() {
           `Hello ${invoice.customerName},\n\n` +
           `Your invoice #${invoice.invoiceNo} from ${invoice.business} has been generated.\n\n` +
           `${paymentInfo}\n\n` +
-          `You can download your invoice using the link shared or find the attached copy.\n\n` +
           `Thank you for choosing ${invoice.business}!`
         );
         
@@ -579,7 +601,6 @@ export default function InvoicePage() {
         console.error('Error:', error);
         toast({ title: "Error", description: "Failed to generate invoice PDF", variant: "destructive" });
       } finally {
-        // Clean up
         document.body.removeChild(hiddenContainer);
       }
     };
