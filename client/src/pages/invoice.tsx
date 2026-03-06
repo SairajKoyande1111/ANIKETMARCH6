@@ -536,7 +536,7 @@ export default function InvoicePage() {
         if (phoneNumber.startsWith('0')) phoneNumber = '91' + phoneNumber.substring(1);
         else if (!phoneNumber.startsWith('91')) phoneNumber = '91' + phoneNumber;
 
-        const message = encodeURIComponent(`Hello ${invoice.customerName}, here is your invoice #${invoice.invoiceNo} from ${invoice.business}.`);
+        const message = encodeURIComponent(`Hello ${invoice.customerName}, here is your invoice #${invoice.invoiceNo} for ₹${invoice.totalAmount.toLocaleString()} from ${invoice.business}.`);
         window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
         
         toast({ title: "Success", description: "Invoice downloaded and WhatsApp opened" });
